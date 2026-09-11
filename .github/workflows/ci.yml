@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: extension/package-lock.json }
+      - run: npm ci
+        working-directory: extension
+      - run: npm run check
+        working-directory: extension
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11", cache: pip }
+      - run: pip install -e ".[dev]"
+        working-directory: backend
+      - run: python -m ruff check app tests
+        working-directory: backend
+      - run: python -m mypy app
+        working-directory: backend
+      - run: python -m pytest
+        working-directory: backend
