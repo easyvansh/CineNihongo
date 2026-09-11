@@ -47,6 +47,8 @@ Copy-Item .env.example .env
 
 The first transcription downloads the configured Whisper model. Check service state at `http://127.0.0.1:8765/health`.
 
+The default installation uses pykakasi's bundled readings. For Sudachi's additional dictionary coverage, install the optional `full-dictionary` extra (`pip install -e ".[dev,full-dictionary]"`); it downloads roughly 40 MB.
+
 ### Extension
 
 ```powershell

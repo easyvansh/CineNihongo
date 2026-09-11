@@ -6,10 +6,15 @@ from sudachipy import Dictionary, SplitMode
 
 class JapaneseRomanizer:
     def __init__(self) -> None:
-        self.tokenizer = Dictionary().create()
+        try:
+            self.tokenizer = Dictionary().create()
+        except Exception:
+            self.tokenizer = None
         self.converter = kakasi()
 
     def reading(self, text: str) -> str:
+        if self.tokenizer is None:
+            return "".join(part["kana"] for part in self.converter.convert(text))
         values = []
         for token in self.tokenizer.tokenize(text, SplitMode.C):
             reading = token.reading_form()
