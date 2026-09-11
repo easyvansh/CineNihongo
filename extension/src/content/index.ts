@@ -1,12 +1,13 @@
 import { api } from "../shared/api";
 import { DEFAULT_SETTINGS, type AlignedSubtitle, type RuntimeMessage, type Settings, type SubtitleEvent } from "../shared/types";
-import { findElements, parseFilmId } from "./siteAdapter";
+import { findElements, normalizeSubtitle, parseFilmId } from "./siteAdapter";
 import { SubtitleObserver } from "./subtitleObserver";
 import { Overlay } from "./overlay";
 import { cueAt, parseSubtitleFile, type FileCue } from "./subtitleFile";
 
 let settings: Settings = DEFAULT_SETTINGS;
 let sessionId: string | null = null;
+let activeFilmId: string | null = null;
 let generation = 0;
 let current: SubtitleEvent | null = null;
 let lastResult: AlignedSubtitle | null = null;
@@ -36,7 +37,7 @@ function onSubtitle(text: string) {
   const now = video.currentTime;
   if (current && (!text || text !== current.englishText)) {
     current.disappearedAtVideoTime = now;
-    void submit(current);
+    if (settings.processingMode === "delayed") void submit(current);
     current = null;
   }
   if (text) {
@@ -62,6 +63,9 @@ function sync() {
 }
 
 function attach() {
+  if (sessionId && activeFilmId !== filmId()) {
+    void stop().then(() => { status = "Movie changed — press Start"; render(); });
+  }
   const found = findElements();
   if (!found.player || !found.video || !found.subtitle) return;
   if (video !== found.video) {
@@ -86,14 +90,17 @@ async function start(next: Settings) {
   attach();
   if (!video) throw new Error("Video player not detected yet");
   const session = await api.startSession(id, settings.model, settings.confidenceThreshold);
-  sessionId = session.sessionId; generation = 0; status = "connected"; render();
+  sessionId = session.sessionId; activeFilmId = id; generation = 0; status = "connected";
+  onSubtitle(normalizeSubtitle(subtitleNode)); render();
   sendRuntime({ type: "CAPTURE_START", sessionId }); sync();
 }
 
 async function stop() {
+  const stoppingSession = sessionId;
+  sessionId = null; activeFilmId = null;
   sendRuntime({ type: "CAPTURE_STOP" });
-  if (sessionId) await api.stopSession(sessionId).catch(() => undefined);
-  sessionId = null; current = null; lastResult = null; status = "stopped"; render();
+  if (stoppingSession) await api.stopSession(stoppingSession).catch(() => undefined);
+  current = null; lastResult = null; status = "stopped"; render();
 }
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, respond) => {
