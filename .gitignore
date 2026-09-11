@@ -15,6 +15,7 @@ __pycache__/
 
 # Runtime/private data
 .env
+.cert/
 *.sqlite3
 data/
 debug-recordings/

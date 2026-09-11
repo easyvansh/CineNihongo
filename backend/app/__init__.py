@@ -1,0 +1,1 @@
+"""CineNihongo local service."""
