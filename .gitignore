@@ -1,0 +1,28 @@
+# Node
+node_modules/
+extension/dist/
+extension/coverage/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Runtime/private data
+.env
+*.sqlite3
+data/
+debug-recordings/
+samples/test-audio/*
+!samples/test-audio/.gitkeep
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
