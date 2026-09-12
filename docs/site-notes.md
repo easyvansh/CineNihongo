@@ -13,3 +13,5 @@ The video and caption tracks use same-origin `blob:` URLs. CineNihongo deliberat
 Generated `svelte-*` and Tailwind utility classes are not adapter contracts. All nodes can be replaced during client-side navigation, so discovery remains active.
 
 If capture is blocked or protected, the supported fallback is a user-selected Japanese SRT/VTT file.
+
+YouTube uses `.html5-main-video` and `.ytp-caption-window-container`. Other sites use active native text tracks first, then common caption selectors or the user-driven element picker. Cross-origin frames, canvas players, and protected playback remain explicit limitations.

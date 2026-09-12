@@ -4,6 +4,16 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/) and [
 
 ## [Unreleased]
 
+## [1.1.0] - Unreleased
+
+### Changed
+
+- Reworked extension activation around adapters for CineJoy, YouTube, native text tracks, and generic HTML5 video.
+- Decoupled SRT/VTT playback from backend sessions and tab capture.
+- Added acknowledged capture startup, diagnostics, subtitle offsets, rolling ASR windows, and an element picker.
+
+Manual browser acceptance is required before tagging this release.
+
 ## [1.0.0] - 2026-09-11
 
 ### Added

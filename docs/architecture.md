@@ -1,10 +1,10 @@
 # Architecture
 
-CineNihongo has two trust zones. The MV3 extension observes CineJoy playback and captures audio only after user activation. A FastAPI service on `127.0.0.1` owns all inference and persistent text caching.
+CineNihongo has two trust zones. The MV3 extension is injected into the active tab after user activation and selects a CineJoy, YouTube, native-text-track, or generic HTML5 adapter. A FastAPI service on `127.0.0.1` owns inference and persistent text caching.
 
 ## Extension lifecycle
 
-The content script discovers `.player-root`, its `video`, and `.lp-subtitle`. It reattaches when Svelte replaces nodes. Subtitle mutations produce media-time cues. The background service worker obtains a tab-capture stream ID and delegates long-running media processing to an offscreen document. An AudioWorklet downmixes audio; the offscreen document resamples and sends header/binary frame pairs over WebSocket.
+The content controller selects the largest visible/playing video and observes adapter-specific DOM captions or native text tracks. Its fixed overlay follows the video rectangle and survives player replacement. File cues run entirely in this controller and do not require capture or a backend. The service worker owns acknowledged live-ASR startup and proxies localhost requests. An offscreen AudioWorklet downmixes/resamples tab audio and sends header/binary frame pairs over WebSocket.
 
 Seek generations are monotonic. Both audio and subtitle messages carry the current generation, and the backend clears transient state when it advances.
 

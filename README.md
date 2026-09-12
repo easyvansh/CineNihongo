@@ -7,7 +7,7 @@ CineNihongo is a privacy-first Chrome/Edge extension that listens to Japanese di
 
 ## Status
 
-Version 1.0.0 implements the complete local pipeline for `https://cinejoy.to/watch/movie/*`: subtitle observation, tab-audio streaming, local Japanese ASR, romanization, alignment, caching, seek recovery, debug information, and SRT/VTT fallback.
+Version 1.1 supports CineJoy, YouTube, native text tracks, and generic HTML5 video through adapter-based detection. SRT/VTT playback works independently of the backend; live ASR remains local and requires user-approved tab capture.
 
 ## Architecture
 
@@ -63,7 +63,7 @@ Open `chrome://extensions` or `edge://extensions`, enable **Developer mode**, ch
 
 1. Start the backend.
 2. Open a CineJoy URL matching `/watch/movie/{filmId}` and enable English subtitles.
-3. Open the CineNihongo popup and click **Start**. Browser tab capture begins only after this click.
+3. Open the CineNihongo popup, run diagnostics, and click **Start Live ASR**. Browser tab capture begins only after this click.
 4. Watch normally. Completed English cues trigger Japanese transcription and the overlay.
 5. Click **Stop** to release capture immediately.
 
@@ -71,7 +71,7 @@ Delayed mode is the reliable default: a cue is processed once the next cue estab
 
 ## Japanese subtitle fallback
 
-If capture is unavailable, choose a UTF-8 `.srt` or `.vtt` file in the popup. Japanese cues are parsed locally, romanized by the localhost service, and synchronized using `video.currentTime`.
+If capture is unavailable, choose a UTF-8 `.srt` or `.vtt` file in the popup. Japanese cues are parsed and synchronized locally without starting capture or requiring the backend. Kana receives an offline romaji fallback; the backend improves readings when available. Use the offset controls if the file and video differ.
 
 ## Configuration
 
@@ -102,6 +102,8 @@ cd backend; python -m pytest; python -m ruff check app tests; python -m mypy app
 ```
 
 See [architecture](docs/architecture.md), [CineJoy notes](docs/site-notes.md), [debugging](docs/debugging.md), and the original [roadmap](CineNihongo_V2_PLAN.md).
+
+For a backend-free file-mode smoke test, serve the repository with `python -m http.server 8080`, open `http://127.0.0.1:8080/extension/fixtures/player.html`, and load `samples/manual-ja.srt` from the popup.
 
 ## Privacy and limitations
 
