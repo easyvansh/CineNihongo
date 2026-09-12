@@ -1,34 +1,34 @@
-import type { RuntimeMessage } from "../shared/types";
-
-async function ensureOffscreen() {
-  const url = chrome.runtime.getURL("offscreen.html");
-  const contexts = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT], documentUrls: [url] });
-  if (!contexts.length) await chrome.offscreen.createDocument({ url: "offscreen.html", reasons: [chrome.offscreen.Reason.USER_MEDIA], justification: "Capture user-approved tab audio for local transcription" });
+import { PROTOCOL_VERSION, type CapabilityReport, type ErrorCode, type RuntimeMessage, type RuntimeState, type Settings } from "../shared/types";
+const BASE = "http://127.0.0.1:8765"; const states = new Map<number, RuntimeState>(); let active: { tabId: number; sessionId: string } | null = null;
+const headers = { "Content-Type": "application/json", "X-CineNihongo-Protocol": PROTOCOL_VERSION };
+function failure(code: ErrorCode, message: string): RuntimeState { return { phase: "error", lastError: { code, message } }; }
+async function ensureContent(tabId: number) { try { await chrome.tabs.sendMessage(tabId, { type: "GET_STATE" } satisfies RuntimeMessage); } catch { await chrome.scripting.executeScript({ target: { tabId, allFrames: false }, files: ["assets/content.js"] }); } }
+async function backendHealth() { try { const response = await fetch(`${BASE}/health`); return response.ok; } catch { return false; } }
+async function createSession(capability: CapabilityReport, settings: Settings) { const response = await fetch(`${BASE}/api/v1/sessions`, { method: "POST", headers, body: JSON.stringify({ filmId: capability.mediaId, model: settings.model, confidenceThreshold: settings.confidenceThreshold, protocolVersion: PROTOCOL_VERSION }) }); if (!response.ok) throw new Error(await response.text()); return response.json() as Promise<{ sessionId: string }>; }
+async function deleteSession(sessionId: string) { await fetch(`${BASE}/api/v1/sessions/${sessionId}`, { method: "DELETE", headers }).catch(() => undefined); }
+async function ensureOffscreen() { const url = chrome.runtime.getURL("offscreen.html"); const contexts = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT], documentUrls: [url] }); if (!contexts.length) await chrome.offscreen.createDocument({ url: "offscreen.html", reasons: [chrome.offscreen.Reason.USER_MEDIA], justification: "Capture user-approved tab audio for local transcription" }); }
+function streamId(tabId: number) { return new Promise<string>((resolve, reject) => chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => { const error = chrome.runtime.lastError; if (error || !id) reject(new Error(error?.message ?? "Tab capture denied")); else resolve(id); })); }
+async function detect(tabId: number): Promise<CapabilityReport> { await ensureContent(tabId); const reachable = await backendHealth(); return chrome.tabs.sendMessage(tabId, { type: "DETECT", backendReachable: reachable } satisfies RuntimeMessage); }
+async function stop(tabId?: number) { if (active && (!tabId || active.tabId === tabId)) { await chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP" } satisfies RuntimeMessage).catch(() => undefined); await deleteSession(active.sessionId); active = null; } if (tabId) { await chrome.tabs.sendMessage(tabId, { type: "CONTENT_STOP" } satisfies RuntimeMessage).catch(() => undefined); states.set(tabId, { phase: "idle" }); } }
+async function startLive(tabId: number, settings: Settings): Promise<RuntimeState> {
+  await stop(active?.tabId); states.set(tabId, { phase: "detecting", mode: "live-asr" }); const capability = await detect(tabId);
+  if (!capability.videoFound) { const state = failure("NO_VIDEO", "No visible HTML5 video was found in the active page."); states.set(tabId, state); return state; } if (!capability.backendReachable) { const state = failure("BACKEND_OFFLINE", "The local backend is not reachable on 127.0.0.1:8765."); states.set(tabId, state); return state; }
+  let sessionId = "";
+  try { states.set(tabId, { phase: "backend-connecting", mode: "live-asr", capability }); sessionId = (await createSession(capability, settings)).sessionId; await ensureOffscreen(); const id = await streamId(tabId); const capture = await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId: id, sessionId } satisfies RuntimeMessage); if (!capture?.ok) throw new Error(capture?.error ?? "Offscreen capture failed"); await chrome.tabs.sendMessage(tabId, { type: "LIVE_SESSION", sessionId, settings } satisfies RuntimeMessage); active = { tabId, sessionId }; const state: RuntimeState = { phase: "capturing", mode: "live-asr", capability }; states.set(tabId, state); return state; }
+  catch (error) { if (sessionId) await deleteSession(sessionId); const message = String(error); const code = message.toLowerCase().includes("websocket") ? "WEBSOCKET_FAILED" : message.toLowerCase().includes("capture") ? "CAPTURE_DENIED" : "OFFSCREEN_FAILED"; const state = failure(code, message); states.set(tabId, state); return state; }
 }
-
+async function loadFile(tabId: number, text: string, filename: string, settings: Settings) { await stop(active?.tabId); await ensureContent(tabId); const state = await chrome.tabs.sendMessage(tabId, { type: "IMPORT_SUBTITLES", text, filename, settings } satisfies RuntimeMessage); states.set(tabId, state); return state; }
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, respond) => {
-  if (message.type === "CAPTURE_START") {
-    (async () => {
-      if (!sender.tab?.id) throw new Error("Capture must start from a CineJoy tab");
-      await ensureOffscreen();
-      const streamId = await new Promise<string>((resolve, reject) => {
-        chrome.tabCapture.getMediaStreamId({ targetTabId: sender.tab!.id }, (id) => {
-          const error = chrome.runtime.lastError;
-          if (error) reject(new Error(error.message)); else resolve(id);
-        });
-      });
-      await chrome.runtime.sendMessage({ type: "OFFSCREEN_START", streamId, sessionId: message.sessionId } satisfies RuntimeMessage);
-      respond({ ok: true });
-    })().catch((e) => { respond({ ok: false, error: String(e) }); });
-    return true;
-  }
-  if (message.type === "CAPTURE_STOP") { chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP" } satisfies RuntimeMessage).then(() => respond({ ok: true })); return true; }
-  if (message.type === "CAPTURE_SYNC") { chrome.runtime.sendMessage({ ...message, type: "OFFSCREEN_SYNC" } satisfies RuntimeMessage).then(() => respond({ ok: true })); return true; }
-  if (message.type === "ALIGNED_RESULT" || message.type === "CAPTURE_STATE") {
-    chrome.tabs.query({ url: "https://cinejoy.to/watch/movie/*" }).then((tabs) => Promise.all(tabs.flatMap((tab) => tab.id ? [chrome.tabs.sendMessage(tab.id, message).catch(() => undefined)] : [])));
-  }
+  if (message.type === "ENSURE_CONTENT") { ensureContent(message.tabId).then(() => respond({ ok: true })).catch((error) => respond(failure("UNKNOWN", String(error)))); return true; }
+  if (message.type === "DIAGNOSTICS" && message.tabId) { detect(message.tabId).then((capability) => chrome.tabs.sendMessage(message.tabId!, { type: "GET_STATE" } satisfies RuntimeMessage).then((state) => respond({ ...state, capability }))).catch((error) => respond(failure("UNKNOWN", String(error)))); return true; }
+  if (message.type === "GET_STATE" && message.tabId) { respond(states.get(message.tabId) ?? { phase: "idle" }); return; }
+  if (message.type === "START_LIVE") { startLive(message.tabId, message.settings).then(respond); return true; }
+  if (message.type === "LOAD_FILE") { loadFile(message.tabId, message.text, message.filename, message.settings).then(respond).catch((error) => respond(failure("UNKNOWN", String(error)))); return true; }
+  if (message.type === "PICK_SUBTITLE") { ensureContent(message.tabId).then(() => chrome.tabs.sendMessage(message.tabId, { type: "BEGIN_PICK_SUBTITLE" } satisfies RuntimeMessage)).then(respond).catch((error) => respond(failure("UNKNOWN", String(error)))); return true; }
+  if (message.type === "SUBTITLE_EVENT") { fetch(`${BASE}/api/v1/sessions/${message.event.sessionId}/subtitle-events`, { method: "POST", headers, body: JSON.stringify(message.event) }).then(async (response) => { if (!response.ok) throw new Error(await response.text()); return response.json(); }).then(respond).catch((error) => respond(failure("UNKNOWN", String(error)))); return true; }
+  if (message.type === "ROMANIZE") { fetch(`${BASE}/api/v1/romanize`, { method: "POST", headers, body: JSON.stringify({ text: message.text }) }).then(async (response) => { if (!response.ok) throw new Error(await response.text()); return response.json(); }).then(respond).catch(() => respond({ japanese: message.text, romaji: "" })); return true; }
+  if (message.type === "STOP") { stop(message.tabId).then(() => respond({ phase: "idle" })); return true; }
+  if (message.type === "CAPTURE_SYNC") { chrome.runtime.sendMessage({ ...message, type: "OFFSCREEN_SYNC" } satisfies RuntimeMessage).then(() => respond({ ok: true })).catch(() => respond({ ok: false })); return true; }
+  if ((message.type === "ALIGNED_RESULT" || message.type === "CAPTURE_STATE") && active) { if (message.type === "CAPTURE_STATE") { const previous = states.get(active.tabId) ?? { phase: message.state }; states.set(active.tabId, { ...previous, phase: message.state, bufferedAudioSeconds: message.bufferedAudioSeconds, lastError: message.detail ? { code: "UNKNOWN", message: message.detail } : undefined }); } chrome.tabs.sendMessage(active.tabId, message).catch(() => undefined); }
 });
-
-chrome.commands.onCommand.addListener((command) => {
-  if (command === "replay-dialogue") chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab?.id && chrome.tabs.sendMessage(tab.id, { type: "REPLAY" } satisfies RuntimeMessage));
-});
+chrome.commands.onCommand.addListener((command) => { if (command === "replay-dialogue") chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab?.id && chrome.tabs.sendMessage(tab.id, { type: "REPLAY" } satisfies RuntimeMessage)); });
