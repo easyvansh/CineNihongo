@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cueAt, parseSubtitleFile } from "./subtitleFile";
+import { cueAt, fallbackRomanize, parseSubtitleFile } from "./subtitleFile";
 
 describe("subtitle files", () => {
   it("parses SRT and strips markup", () => {
@@ -11,5 +11,10 @@ describe("subtitle files", () => {
 
   it("parses WebVTT without numeric indexes", () => {
     expect(parseSubtitleFile("WEBVTT\n\n00:01.000 --> 00:03.000\nこんにちは")).toHaveLength(1);
+  });
+
+  it("provides offline kana romanization", () => {
+    expect(fallbackRomanize("こんにちは")).toBe("konnichiha");
+    expect(fallbackRomanize("カタカナ")).toBe("katakana");
   });
 });

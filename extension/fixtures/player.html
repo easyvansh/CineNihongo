@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CineNihongo manual fixture</title><style>body{margin:0;background:#111;color:#fff;font-family:system-ui}.stage{position:relative;width:min(900px,90vw);margin:5vh auto}video{display:block;width:100%;background:#000}.caption{position:absolute;left:10%;right:10%;bottom:8%;text-align:center;font-size:28px;font-weight:700;text-shadow:0 2px 4px #000}</style></head>
+<body><div class="stage"><video controls autoplay muted></video><div class="caption">Synthetic test player</div></div>
+<script>
+const canvas=document.createElement("canvas");canvas.width=1280;canvas.height=720;const context=canvas.getContext("2d");let frame=0;
+function draw(){context.fillStyle="#111827";context.fillRect(0,0,canvas.width,canvas.height);context.fillStyle="#a78bfa";context.font="bold 64px system-ui";context.textAlign="center";context.fillText(`CineNihongo fixture ${Math.floor(frame/60)}s`,640,360);frame++;requestAnimationFrame(draw)}draw();
+document.querySelector("video").srcObject=canvas.captureStream(30);
+</script></body></html>

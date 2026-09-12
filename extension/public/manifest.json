@@ -1,25 +1,17 @@
 {
   "manifest_version": 3,
   "name": "CineNihongo",
-  "version": "1.0.0",
-  "description": "Local Japanese transcription and romaji overlays for CineJoy movies.",
+  "version": "1.1.0",
+  "description": "Local Japanese transcription and romaji overlays for HTML5 video.",
   "permissions": ["storage", "activeTab", "scripting", "tabCapture", "offscreen"],
-  "host_permissions": ["https://cinejoy.to/*", "http://127.0.0.1:8765/*"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "assets/background.js", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "CineNihongo" },
-  "content_scripts": [{
-    "matches": ["https://cinejoy.to/watch/movie/*"],
-    "js": ["assets/content.js"],
-    "run_at": "document_idle"
-  }],
   "commands": {
     "replay-dialogue": {
       "suggested_key": { "default": "Alt+R" },
       "description": "Replay the current dialogue"
     }
-  },
-  "web_accessible_resources": [{
-    "resources": ["audio-worklet.js"],
-    "matches": ["https://cinejoy.to/*"]
-  }]
+  }
 }
