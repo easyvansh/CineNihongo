@@ -35,7 +35,9 @@ class AudioRingBuffer:
                 continue
             duration = max(block.end - block.start, len(block.samples) / self.sample_rate)
             left = max(0, round((start - block.start) / duration * len(block.samples)))
-            right = min(len(block.samples), round((end - block.start) / duration * len(block.samples)))
+            right = min(
+                len(block.samples), round((end - block.start) / duration * len(block.samples))
+            )
             if right > left:
                 pieces.append(block.samples[left:right])
         return np.concatenate(pieces) if pieces else np.empty(0, dtype=np.float32)

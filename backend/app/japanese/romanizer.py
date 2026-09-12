@@ -10,7 +10,7 @@ class JapaneseRomanizer:
             self.tokenizer = Dictionary().create()
         except Exception:
             self.tokenizer = None
-        self.converter = kakasi()
+        self.converter = kakasi()  # type: ignore[no-untyped-call]
 
     def reading(self, text: str) -> str:
         if self.tokenizer is None:

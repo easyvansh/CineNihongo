@@ -1,6 +1,7 @@
 import logging
 import threading
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -24,17 +25,21 @@ class WhisperEngine:
         self.active_device = "not-loaded"
         self.state = "not-loaded"
         self.last_error: str | None = None
-        self._model = None
+        self._model: Any = None
         self._lock = threading.Lock()
 
-    def _load(self) -> object:
+    def _load(self) -> Any:
         if self._model is not None:
             return self._model
         from faster_whisper import WhisperModel
 
         self.state = "downloading"
         device = "cuda" if self.requested_device == "auto" else self.requested_device
-        compute = "float16" if self.requested_compute_type == "auto" and device == "cuda" else self.requested_compute_type
+        compute = (
+            "float16"
+            if self.requested_compute_type == "auto" and device == "cuda"
+            else self.requested_compute_type
+        )
         if compute == "auto":
             compute = "int8"
         try:
@@ -60,7 +65,9 @@ class WhisperEngine:
             return None
         with self._lock:
             model = self._load()
-            segments, _ = model.transcribe(samples, language="ja", beam_size=5, word_timestamps=True, vad_filter=False)
+            segments, _ = model.transcribe(
+                samples, language="ja", beam_size=5, word_timestamps=True, vad_filter=False
+            )
             materialized = list(segments)
         text = "".join(segment.text.strip() for segment in materialized).strip()
         if not text:

@@ -55,16 +55,39 @@ def require_protocol(value: str | None) -> None:
 @app.get("/health")
 async def health() -> dict[str, object]:
     devices = {name: engine.active_device for name, engine in pipeline.engines.items()}
-    return {"status": "ok", "version": app.version, "protocolVersion": PROTOCOL_VERSION, "model": settings.model, "device": devices.get(settings.model, settings.device), "queueDepth": manager.queue.qsize()}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "protocolVersion": PROTOCOL_VERSION,
+        "model": settings.model,
+        "device": devices.get(settings.model, settings.device),
+        "queueDepth": manager.queue.qsize(),
+    }
 
 
 @app.get("/api/v1/diagnostics")
 async def diagnostics() -> dict[str, object]:
-    return {"status": "ok", "version": app.version, "protocolVersion": PROTOCOL_VERSION, "sessions": len(manager.sessions), "queueDepth": manager.queue.qsize(), "models": {name: {"state": engine.state, "device": engine.active_device, "lastError": engine.last_error} for name, engine in pipeline.engines.items()}}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "protocolVersion": PROTOCOL_VERSION,
+        "sessions": len(manager.sessions),
+        "queueDepth": manager.queue.qsize(),
+        "models": {
+            name: {
+                "state": engine.state,
+                "device": engine.active_device,
+                "lastError": engine.last_error,
+            }
+            for name, engine in pipeline.engines.items()
+        },
+    }
 
 
 @app.post("/api/v1/sessions", response_model=SessionCreated, status_code=201)
-async def create_session(body: SessionCreate, x_cinenihongo_protocol: str | None = Header(None)) -> SessionCreated:
+async def create_session(
+    body: SessionCreate, x_cinenihongo_protocol: str | None = Header(None)
+) -> SessionCreated:
     require_protocol(x_cinenihongo_protocol)
     if body.protocolVersion != PROTOCOL_VERSION:
         raise HTTPException(426, "Unsupported protocol version")
@@ -73,7 +96,9 @@ async def create_session(body: SessionCreate, x_cinenihongo_protocol: str | None
 
 
 @app.delete("/api/v1/sessions/{session_id}")
-async def delete_session(session_id: str, x_cinenihongo_protocol: str | None = Header(None)) -> dict[str, bool]:
+async def delete_session(
+    session_id: str, x_cinenihongo_protocol: str | None = Header(None)
+) -> dict[str, bool]:
     require_protocol(x_cinenihongo_protocol)
     if not manager.get(session_id):
         raise HTTPException(404, "Unknown session")
@@ -82,12 +107,17 @@ async def delete_session(session_id: str, x_cinenihongo_protocol: str | None = H
 
 
 @app.post("/api/v1/sessions/{session_id}/subtitle-events", status_code=202)
-async def subtitle_event(session_id: str, event: SubtitleEvent, x_cinenihongo_protocol: str | None = Header(None)) -> dict[str, bool]:
+async def subtitle_event(
+    session_id: str, event: SubtitleEvent, x_cinenihongo_protocol: str | None = Header(None)
+) -> dict[str, bool]:
     require_protocol(x_cinenihongo_protocol)
     session = manager.get(session_id)
     if not session or event.sessionId != session_id or event.filmId != session.film_id:
         raise HTTPException(404, "Unknown session")
-    if event.disappearedAtVideoTime is not None and event.disappearedAtVideoTime < event.appearedAtVideoTime:
+    if (
+        event.disappearedAtVideoTime is not None
+        and event.disappearedAtVideoTime < event.appearedAtVideoTime
+    ):
         raise HTTPException(422, "Cue end precedes cue start")
     if event.generation > session.generation:
         session.generation = event.generation
@@ -101,13 +131,17 @@ async def subtitle_event(session_id: str, event: SubtitleEvent, x_cinenihongo_pr
 
 
 @app.post("/api/v1/romanize", response_model=RomanizeResponse)
-async def romanize(body: RomanizeRequest, x_cinenihongo_protocol: str | None = Header(None)) -> RomanizeResponse:
+async def romanize(
+    body: RomanizeRequest, x_cinenihongo_protocol: str | None = Header(None)
+) -> RomanizeResponse:
     require_protocol(x_cinenihongo_protocol)
     return RomanizeResponse(japanese=body.text, romaji=romanizer.romanize(body.text))
 
 
 @app.get("/api/v1/sessions/{session_id}/results")
-async def results(session_id: str, x_cinenihongo_protocol: str | None = Header(None)) -> dict[str, object]:
+async def results(
+    session_id: str, x_cinenihongo_protocol: str | None = Header(None)
+) -> dict[str, object]:
     require_protocol(x_cinenihongo_protocol)
     session = manager.get(session_id)
     if not session:
@@ -116,13 +150,27 @@ async def results(session_id: str, x_cinenihongo_protocol: str | None = Header(N
 
 
 @app.get("/api/v1/sessions/{session_id}/diagnostics")
-async def session_diagnostics(session_id: str, x_cinenihongo_protocol: str | None = Header(None)) -> dict[str, object]:
+async def session_diagnostics(
+    session_id: str, x_cinenihongo_protocol: str | None = Header(None)
+) -> dict[str, object]:
     require_protocol(x_cinenihongo_protocol)
     session = manager.get(session_id)
     if not session:
         raise HTTPException(404, "Unknown session")
     engine = pipeline.engines.get(session.model)
-    return {"sessionId": session.id, "filmId": session.film_id, "generation": session.generation, "bufferedAudioSeconds": session.buffer.duration, "receivedAudioFrames": session.received_frames, "queueDepth": manager.queue.qsize(), "lastCue": session.last_cue, "resultCount": len(session.results), "modelState": engine.state if engine else "not-loaded", "modelDevice": engine.active_device if engine else "not-loaded", "lastError": session.last_error}
+    return {
+        "sessionId": session.id,
+        "filmId": session.film_id,
+        "generation": session.generation,
+        "bufferedAudioSeconds": session.buffer.duration,
+        "receivedAudioFrames": session.received_frames,
+        "queueDepth": manager.queue.qsize(),
+        "lastCue": session.last_cue,
+        "resultCount": len(session.results),
+        "modelState": engine.state if engine else "not-loaded",
+        "modelDevice": engine.active_device if engine else "not-loaded",
+        "lastError": session.last_error,
+    }
 
 
 @app.websocket("/api/v1/sessions/{session_id}/stream")
@@ -135,7 +183,10 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
     session.sockets.add(websocket)
     try:
         handshake = await websocket.receive_json()
-        if handshake.get("type") != "handshake" or handshake.get("protocolVersion") != PROTOCOL_VERSION:
+        if (
+            handshake.get("type") != "handshake"
+            or handshake.get("protocolVersion") != PROTOCOL_VERSION
+        ):
             await websocket.close(code=4426, reason="Protocol mismatch")
             return
         await websocket.send_json({"type": "ready", "protocolVersion": PROTOCOL_VERSION})
@@ -148,14 +199,25 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
                     session.buffer.clear()
                 session.pending_audio = header
             elif message.get("bytes") is not None:
-                header = session.pending_audio
+                pending_header = session.pending_audio
                 payload: bytes = message["bytes"]
-                if header is None or len(payload) != header.frames * 2:
-                    await websocket.send_json({"type": "error", "code": "invalid_audio_frame", "detail": "Audio header/payload mismatch"})
+                if pending_header is None or len(payload) != pending_header.frames * 2:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "code": "invalid_audio_frame",
+                            "detail": "Audio header/payload mismatch",
+                        }
+                    )
                     continue
-                if header.generation == session.generation:
-                    session.buffer.append(payload, header.mediaStart, header.mediaEnd, header.generation)
-                    session.received_frames += header.frames
+                if pending_header.generation == session.generation:
+                    session.buffer.append(
+                        payload,
+                        pending_header.mediaStart,
+                        pending_header.mediaEnd,
+                        pending_header.generation,
+                    )
+                    session.received_frames += pending_header.frames
                 session.pending_audio = None
     except WebSocketDisconnect:
         pass

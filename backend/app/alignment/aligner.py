@@ -8,7 +8,13 @@ class AlignmentScore:
     center: float
 
 
-def score_alignment(cue_start: float, cue_end: float, segment_start: float, segment_end: float, speech_confidence: float) -> AlignmentScore:
+def score_alignment(
+    cue_start: float,
+    cue_end: float,
+    segment_start: float,
+    segment_end: float,
+    speech_confidence: float,
+) -> AlignmentScore:
     intersection = max(0.0, min(cue_end, segment_end) - max(cue_start, segment_start))
     union = max(cue_end, segment_end) - min(cue_start, segment_start)
     overlap = intersection / union if union else 0.0

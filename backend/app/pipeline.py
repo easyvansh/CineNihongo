@@ -24,7 +24,9 @@ class Pipeline:
 
     def engine(self, model: str) -> WhisperEngine:
         if model not in self.engines:
-            self.engines[model] = WhisperEngine(model, self.settings.device, self.settings.compute_type)
+            self.engines[model] = WhisperEngine(
+                model, self.settings.device, self.settings.compute_type
+            )
         return self.engines[model]
 
     async def run(self) -> None:
@@ -47,14 +49,20 @@ class Pipeline:
         if not isinstance(event, SubtitleEvent):
             return
         session = self.manager.get(event.sessionId)
-        if not session or event.generation != session.generation or event.disappearedAtVideoTime is None:
+        if (
+            not session
+            or event.generation != session.generation
+            or event.disappearedAtVideoTime is None
+        ):
             return
         start = max(0, event.appearedAtVideoTime - self.settings.lead_padding)
         end = event.disappearedAtVideoTime + self.settings.tail_padding
         key = self.cache.key(event.filmId, start, end, session.model)
         cached = self.cache.get(key)
         if cached:
-            cached = cached.model_copy(update={"subtitleId": event.id, "english": event.englishText, "source": "cache"})
+            cached = cached.model_copy(
+                update={"subtitleId": event.id, "english": event.englishText, "source": "cache"}
+            )
             await self.manager.publish(session, cached)
             return
         await asyncio.sleep(self.settings.tail_padding)
@@ -69,7 +77,13 @@ class Pipeline:
             return
         segment_start = start + transcript.start
         segment_end = start + transcript.end
-        score = score_alignment(event.appearedAtVideoTime, event.disappearedAtVideoTime, segment_start, segment_end, transcript.confidence)
+        score = score_alignment(
+            event.appearedAtVideoTime,
+            event.disappearedAtVideoTime,
+            segment_start,
+            segment_end,
+            transcript.confidence,
+        )
         if score.value < session.confidence_threshold:
             return
         result = AlignedSubtitle(

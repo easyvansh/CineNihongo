@@ -33,7 +33,9 @@ class SessionManager:
 
     def create(self, film_id: str, model: str, threshold: float) -> Session:
         session_id = str(uuid4())
-        session = Session(session_id, film_id, model, threshold, AudioRingBuffer(self.buffer_seconds))
+        session = Session(
+            session_id, film_id, model, threshold, AudioRingBuffer(self.buffer_seconds)
+        )
         self.sessions[session_id] = session
         return session
 
@@ -59,7 +61,13 @@ class SessionManager:
         dead: list[WebSocket] = []
         for socket in session.sockets:
             try:
-                await socket.send_json({"type": "result", "protocolVersion": "1", "result": result.model_dump()})
+                await socket.send_json(
+                    {
+                        "type": "result",
+                        "protocolVersion": "2",
+                        "result": result.model_dump(),
+                    }
+                )
             except RuntimeError:
                 dead.append(socket)
         for socket in dead:
