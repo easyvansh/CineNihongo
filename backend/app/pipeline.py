@@ -33,6 +33,9 @@ class Pipeline:
             try:
                 await self.process(event)
             except Exception:
+                session = self.manager.get(event.sessionId)
+                if session:
+                    session.last_error = f"Failed to process cue {event.id}"
                 logger.exception("Failed to process cue %s", event.id)
             finally:
                 self.manager.queued.discard(event.id)

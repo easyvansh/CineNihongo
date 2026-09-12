@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PROTOCOL_VERSION = "1"
+PROTOCOL_VERSION = "2"
 
 
 class SessionCreate(BaseModel):

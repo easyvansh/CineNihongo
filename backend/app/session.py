@@ -19,6 +19,9 @@ class Session:
     pending_audio: AudioHeader | None = None
     sockets: set[WebSocket] = field(default_factory=set)
     results: list[AlignedSubtitle] = field(default_factory=list)
+    received_frames: int = 0
+    last_cue: str | None = None
+    last_error: str | None = None
 
 
 class SessionManager:

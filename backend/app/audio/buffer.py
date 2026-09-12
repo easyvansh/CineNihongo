@@ -42,3 +42,7 @@ class AudioRingBuffer:
 
     def clear(self) -> None:
         self._blocks.clear()
+
+    @property
+    def duration(self) -> float:
+        return sum(max(0.0, block.end - block.start) for block in self._blocks)

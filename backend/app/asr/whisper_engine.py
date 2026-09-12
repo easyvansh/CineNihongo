@@ -22,6 +22,8 @@ class WhisperEngine:
         self.requested_device = device
         self.requested_compute_type = compute_type
         self.active_device = "not-loaded"
+        self.state = "not-loaded"
+        self.last_error: str | None = None
         self._model = None
         self._lock = threading.Lock()
 
@@ -30,6 +32,7 @@ class WhisperEngine:
             return self._model
         from faster_whisper import WhisperModel
 
+        self.state = "downloading"
         device = "cuda" if self.requested_device == "auto" else self.requested_device
         compute = "float16" if self.requested_compute_type == "auto" and device == "cuda" else self.requested_compute_type
         if compute == "auto":
@@ -37,12 +40,19 @@ class WhisperEngine:
         try:
             self._model = WhisperModel(self.model_name, device=device, compute_type=compute)
             self.active_device = device
+            self.state = "ready"
         except Exception:
             if device == "cpu":
                 raise
             logger.warning("CUDA model load failed; falling back to CPU", exc_info=True)
-            self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-            self.active_device = "cpu"
+            try:
+                self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+                self.active_device = "cpu-fallback"
+                self.state = "ready"
+            except Exception as error:
+                self.state = "failed"
+                self.last_error = str(error)
+                raise
         return self._model
 
     def transcribe(self, samples: NDArray[np.float32]) -> Transcript | None:

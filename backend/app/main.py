@@ -37,7 +37,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await worker
 
 
-app = FastAPI(title="CineNihongo", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="CineNihongo", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://cinejoy.to"],
@@ -56,6 +56,11 @@ def require_protocol(value: str | None) -> None:
 async def health() -> dict[str, object]:
     devices = {name: engine.active_device for name, engine in pipeline.engines.items()}
     return {"status": "ok", "version": app.version, "protocolVersion": PROTOCOL_VERSION, "model": settings.model, "device": devices.get(settings.model, settings.device), "queueDepth": manager.queue.qsize()}
+
+
+@app.get("/api/v1/diagnostics")
+async def diagnostics() -> dict[str, object]:
+    return {"status": "ok", "version": app.version, "protocolVersion": PROTOCOL_VERSION, "sessions": len(manager.sessions), "queueDepth": manager.queue.qsize(), "models": {name: {"state": engine.state, "device": engine.active_device, "lastError": engine.last_error} for name, engine in pipeline.engines.items()}}
 
 
 @app.post("/api/v1/sessions", response_model=SessionCreated, status_code=201)
@@ -89,6 +94,7 @@ async def subtitle_event(session_id: str, event: SubtitleEvent, x_cinenihongo_pr
         session.buffer.clear()
     if event.generation < session.generation:
         return {"accepted": False}
+    session.last_cue = event.id
     if not manager.enqueue(event):
         raise HTTPException(429, detail={"code": "queue_full_or_duplicate"})
     return {"accepted": True}
@@ -107,6 +113,16 @@ async def results(session_id: str, x_cinenihongo_protocol: str | None = Header(N
     if not session:
         raise HTTPException(404, "Unknown session")
     return {"results": [result.model_dump() for result in session.results]}
+
+
+@app.get("/api/v1/sessions/{session_id}/diagnostics")
+async def session_diagnostics(session_id: str, x_cinenihongo_protocol: str | None = Header(None)) -> dict[str, object]:
+    require_protocol(x_cinenihongo_protocol)
+    session = manager.get(session_id)
+    if not session:
+        raise HTTPException(404, "Unknown session")
+    engine = pipeline.engines.get(session.model)
+    return {"sessionId": session.id, "filmId": session.film_id, "generation": session.generation, "bufferedAudioSeconds": session.buffer.duration, "receivedAudioFrames": session.received_frames, "queueDepth": manager.queue.qsize(), "lastCue": session.last_cue, "resultCount": len(session.results), "modelState": engine.state if engine else "not-loaded", "modelDevice": engine.active_device if engine else "not-loaded", "lastError": session.last_error}
 
 
 @app.websocket("/api/v1/sessions/{session_id}/stream")
@@ -139,6 +155,7 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
                     continue
                 if header.generation == session.generation:
                     session.buffer.append(payload, header.mediaStart, header.mediaEnd, header.generation)
+                    session.received_frames += header.frames
                 session.pending_audio = None
     except WebSocketDisconnect:
         pass
