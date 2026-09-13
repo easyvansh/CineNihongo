@@ -1,15 +1,11 @@
-# Architecture
+# Runtime architecture (protocol 3)
 
-CineNihongo has two trust zones. The MV3 extension is injected into the active tab after user activation and selects a CineJoy, YouTube, native-text-track, or generic HTML5 adapter. A FastAPI service on `127.0.0.1` owns inference and persistent text caching.
+The MV3 service worker owns one live tab/session. The popup requests a start; the worker detects the page, checks backend protocol compatibility, creates a session, obtains the tab stream ID, and waits for the offscreen WebSocket handshake. Only then does the page begin timing capture. Active ownership is stored in session storage so service-worker suspension does not lose it. Switching modes/tabs is serialized; tab closure, navigation, capture loss and Stop release capture and backend memory.
 
-## Extension lifecycle
+The content script is a standalone IIFE, built separately from the ESM popup, background and offscreen scripts. Chrome's scripting injection loads classic JavaScript. A single 200 ms controller discovers the player/caption source, advances caption or overlapping rolling windows, synchronizes the media clock and renders the overlay. Video listeners have abortable ownership. Settings restore native caption visibility when stopped. SPA media changes invalidate session identity; seeks, rate changes and player replacement increment the generation.
 
-The content controller selects the largest visible/playing video and observes adapter-specific DOM captions or native text tracks. Its fixed overlay follows the video rectangle and survives player replacement. File cues run entirely in this controller and do not require capture or a backend. The service worker owns acknowledged live-ASR startup and proxies localhost requests. An offscreen AudioWorklet downmixes/resamples tab audio and sends header/binary frame pairs over WebSocket.
+The worklet downmixes channels and batches 2048 source samples with the AudioContext timestamp. A streaming fractional box-filter resampler produces 16 kHz PCM16, retaining fractional coverage between batches. Media timestamps come from a synchronized anchor plus sample counts. Paused audio is not sent. Sync messages invalidate server generations even when no audio follows. The offscreen document detects lost tracks, stale timing, silence and bounded WebSocket backlog.
 
-Seek generations are monotonic. Both audio and subtitle messages carry the current generation, and the backend clears transient state when it advances.
+The backend validates protocol, audio type/size/timestamps, generation and session ownership. At submission it snapshots each completed window from the ring buffer so queuing cannot overwrite its audio. One worker performs local Japanese ASR and romanization. Silence is gated without trimming timestamp origins; speech confidence gates rolling and caption windows equally. Native inference cannot be cancelled by Python, so a timed-out task remains the only inference in flight until it finishes. Queue size and result history are bounded. Failures/model state reach the popup through WebSocket status messages.
 
-## Backend lifecycle
-
-Each session has a bounded audio buffer, WebSocket subscribers, results, a film identity, and model configuration. Closed cues enter a bounded queue. Workers slice audio with padding, trim silence, run Japanese Whisper, romanize the transcript, score timing alignment, cache accepted results, and publish them.
-
-SQLite contains transcript results only. Audio remains in memory unless debug recording is explicitly added and enabled in a future diagnostic build.
+Results carry session identity, media identity and generation. The page rejects stale generations and out-of-order results. Live output uses a short delayed presentation interval, while retaining recognized source timestamps for replay. File output is presented only in its exact offset interval and renders immediately before optional backend romanization. Text cache keys include media, window, model, processing version and playback rate; audio is never persisted.

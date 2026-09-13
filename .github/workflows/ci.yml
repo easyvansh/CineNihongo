@@ -13,6 +13,10 @@ jobs:
         working-directory: extension
       - run: npm run check
         working-directory: extension
+      - run: npx playwright install --with-deps chromium
+        working-directory: extension
+      - run: npm run test:browser
+        working-directory: extension
   backend:
     runs-on: ubuntu-latest
     steps:

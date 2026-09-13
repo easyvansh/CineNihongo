@@ -26,3 +26,11 @@ Manual browser acceptance is required before tagging this release.
 
 [Unreleased]: https://github.com/easyvansh/CineNihongo/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/easyvansh/CineNihongo/releases/tag/v1.0.0
+# 1.2.0
+
+- Restored package metadata and pinned extension dependencies; build injected content as a standalone classic script.
+- Protocol 3 adds session/generation-aware results, rolling windows, playback-rate metadata and paused-seek sync.
+- Handle replaced players/captions, captionless audio, delayed result expiry, subtitle offsets and fullscreen containers.
+- Batch/resample tab audio continuously; clean up failed capture and expose silence, connection and model diagnostics.
+- Snapshot queued audio; gate on speech confidence; validate streams and bound session history.
+- Added automated Chromium extension fixtures and expanded capture/backend regression coverage.
