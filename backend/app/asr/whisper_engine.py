@@ -46,8 +46,10 @@ class WhisperEngine:
             self._model = WhisperModel(self.model_name, device=device, compute_type=compute)
             self.active_device = device
             self.state = "ready"
-        except Exception:
+        except Exception as error:
             if device == "cpu":
+                self.state = "failed"
+                self.last_error = str(error)
                 raise
             logger.warning("CUDA model load failed; falling back to CPU", exc_info=True)
             try:
@@ -65,13 +67,37 @@ class WhisperEngine:
             return None
         with self._lock:
             model = self._load()
-            segments, _ = model.transcribe(
-                samples, language="ja", beam_size=5, word_timestamps=True, vad_filter=False
-            )
-            materialized = list(segments)
+            try:
+                materialized = self._segments(model, samples)
+            except Exception as error:
+                if self.active_device != "cuda":
+                    self.state = "failed"
+                    self.last_error = str(error)
+                    raise
+                # CUDA libraries may fail on the first inference, after model loading.
+                from faster_whisper import WhisperModel
+
+                logger.warning("CUDA inference failed; retrying on CPU", exc_info=True)
+                try:
+                    self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+                    self.active_device = "cpu-fallback"
+                    materialized = self._segments(self._model, samples)
+                except Exception as fallback_error:
+                    self.state = "failed"
+                    self.last_error = str(fallback_error)
+                    raise
+            self.state = "ready"
+            self.last_error = None
         text = "".join(segment.text.strip() for segment in materialized).strip()
         if not text:
             return None
         avg_logprob = sum(segment.avg_logprob for segment in materialized) / len(materialized)
         confidence = max(0.0, min(1.0, np.exp(avg_logprob)))
         return Transcript(text, materialized[0].start, materialized[-1].end, float(confidence))
+
+    @staticmethod
+    def _segments(model: Any, samples: NDArray[np.float32]) -> list[Any]:
+        segments, _ = model.transcribe(
+            samples, language="ja", beam_size=5, word_timestamps=True, vad_filter=False
+        )
+        return list(segments)

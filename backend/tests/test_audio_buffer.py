@@ -19,3 +19,9 @@ def test_clear() -> None:
     buffer.append(pcm([0.1]), 0, 0.1, 0)
     buffer.clear()
     assert buffer.slice(0, 1, 0).size == 0
+
+
+def test_half_speed_uses_media_duration_for_slicing() -> None:
+    buffer = AudioRingBuffer(15, sample_rate=4)
+    buffer.append(pcm([0.1, 0.2, 0.3, 0.4]), 0, 0.5, 0)
+    assert len(buffer.slice(0.25, 0.5, 0)) == 2

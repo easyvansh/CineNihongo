@@ -21,7 +21,7 @@ class ResultCache:
         self.connection.commit()
 
     @staticmethod
-    def key(film_id: str, start: float, end: float, model: str, pipeline: str = "1") -> str:
+    def key(film_id: str, start: float, end: float, model: str, pipeline: str = "3") -> str:
         return f"{film_id}:{start:.2f}:{end:.2f}:{model}:{pipeline}"
 
     def get(self, key: str) -> AlignedSubtitle | None:

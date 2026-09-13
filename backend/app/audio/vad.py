@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 def speech_only(
     samples: NDArray[np.float32], sample_rate: int = 16000, threshold: float = 0.008
 ) -> NDArray[np.float32]:
-    """Trim leading/trailing silence using frame RMS; preserve internal pauses."""
+    """Find speech for silence gating; callers retain the original sample timeline."""
     if samples.size == 0:
         return samples
     frame = max(1, sample_rate // 50)

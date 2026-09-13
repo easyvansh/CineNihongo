@@ -33,7 +33,9 @@ class AudioRingBuffer:
         for block in self._blocks:
             if block.generation != generation or block.end <= start or block.start >= end:
                 continue
-            duration = max(block.end - block.start, len(block.samples) / self.sample_rate)
+            duration = block.end - block.start
+            if duration <= 0:
+                continue
             left = max(0, round((start - block.start) / duration * len(block.samples)))
             right = min(
                 len(block.samples), round((end - block.start) / duration * len(block.samples))

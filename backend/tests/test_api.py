@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-HEADERS = {"X-CineNihongo-Protocol": "2"}
+HEADERS = {"X-CineNihongo-Protocol": "3"}
 
 
 def test_health() -> None:
@@ -10,7 +10,7 @@ def test_health() -> None:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
-        assert client.get("/api/v1/diagnostics").json()["protocolVersion"] == "2"
+        assert client.get("/api/v1/diagnostics").json()["protocolVersion"] == "3"
 
 
 def test_session_lifecycle_and_romanize() -> None:
@@ -22,7 +22,7 @@ def test_session_lifecycle_and_romanize() -> None:
                 "filmId": "17962",
                 "model": "small",
                 "confidenceThreshold": 0.65,
-                "protocolVersion": "2",
+                "protocolVersion": "3",
             },
         )
         assert created.status_code == 201

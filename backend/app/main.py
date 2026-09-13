@@ -1,9 +1,12 @@
 import asyncio
 import contextlib
+import json
+import re
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app.cache import ResultCache
 from app.config import get_settings
@@ -16,6 +19,7 @@ from app.models.schemas import (
     SessionCreate,
     SessionCreated,
     SubtitleEvent,
+    SyncHeader,
 )
 from app.pipeline import Pipeline
 from app.session import SessionManager
@@ -29,19 +33,25 @@ romanizer = JapaneseRomanizer()
 
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    manager.queue = asyncio.Queue(maxsize=settings.queue_size)
+    manager.queued.clear()
+    manager.audio.clear()
+    pipeline.running = True
     worker = asyncio.create_task(pipeline.run())
     yield
     pipeline.running = False
     worker.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await worker
+    for session_id in list(manager.sessions):
+        await manager.delete(session_id)
 
 
-app = FastAPI(title="CineNihongo", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="CineNihongo", version="1.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://cinejoy.to"],
-    allow_origin_regex=r"chrome-extension://.*",
+    allow_origins=[],
+    allow_origin_regex=r"chrome-extension://[a-p]{32}",
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "X-CineNihongo-Protocol"],
 )
@@ -120,11 +130,12 @@ async def subtitle_event(
     ):
         raise HTTPException(422, "Cue end precedes cue start")
     if event.generation > session.generation:
-        session.generation = event.generation
-        session.buffer.clear()
+        session.advance(event.generation)
     if event.generation < session.generation:
         return {"accepted": False}
     session.last_cue = event.id
+    if event.id in session.seen:
+        return {"accepted": False}
     if not manager.enqueue(event):
         raise HTTPException(429, detail={"code": "queue_full_or_duplicate"})
     return {"accepted": True}
@@ -175,14 +186,23 @@ async def session_diagnostics(
 
 @app.websocket("/api/v1/sessions/{session_id}/stream")
 async def stream_audio(websocket: WebSocket, session_id: str) -> None:
+    origin = websocket.headers.get("origin", "")
+    if origin and not re.fullmatch(r"chrome-extension://[a-p]{32}", origin):
+        await websocket.close(code=4403, reason="Extension origin required")
+        return
     session = manager.get(session_id)
     if not session:
         await websocket.close(code=4404, reason="Unknown session")
         return
+    if session.sockets:
+        await websocket.close(code=4409, reason="Session already has an audio stream")
+        return
     await websocket.accept()
     session.sockets.add(websocket)
     try:
-        handshake = await websocket.receive_json()
+        handshake = await asyncio.wait_for(websocket.receive_json(), timeout=5)
+        if not isinstance(handshake, dict):
+            raise ValueError("Invalid handshake")
         if (
             handshake.get("type") != "handshake"
             or handshake.get("protocolVersion") != PROTOCOL_VERSION
@@ -192,16 +212,27 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
         await websocket.send_json({"type": "ready", "protocolVersion": PROTOCOL_VERSION})
         while True:
             message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
             if message.get("text") is not None:
-                header = AudioHeader.model_validate_json(message["text"])
+                raw = json.loads(message["text"])
+                if not isinstance(raw, dict):
+                    raise ValueError("Expected an audio or sync object")
+                if raw.get("type") == "sync":
+                    control = SyncHeader.model_validate(raw)
+                    session.advance(control.generation)
+                    continue
+                if session.pending_audio is not None:
+                    raise ValueError("Audio header must be followed by its payload")
+                header = AudioHeader.model_validate(raw)
                 if header.generation > session.generation:
-                    session.generation = header.generation
-                    session.buffer.clear()
+                    session.advance(header.generation)
                 session.pending_audio = header
             elif message.get("bytes") is not None:
                 pending_header = session.pending_audio
                 payload: bytes = message["bytes"]
                 if pending_header is None or len(payload) != pending_header.frames * 2:
+                    session.pending_audio = None
                     await websocket.send_json(
                         {
                             "type": "error",
@@ -211,6 +242,13 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
                     )
                     continue
                 if pending_header.generation == session.generation:
+                    if (
+                        session.last_audio_end is not None
+                        and pending_header.mediaStart < session.last_audio_end - 0.02
+                    ):
+                        raise ValueError(
+                            "Audio timestamps moved backwards without a new generation"
+                        )
                     session.buffer.append(
                         payload,
                         pending_header.mediaStart,
@@ -218,8 +256,17 @@ async def stream_audio(websocket: WebSocket, session_id: str) -> None:
                         pending_header.generation,
                     )
                     session.received_frames += pending_header.frames
+                    session.last_audio_end = pending_header.mediaEnd
                 session.pending_audio = None
     except WebSocketDisconnect:
         pass
+    except (ValidationError, ValueError, TimeoutError) as error:
+        with contextlib.suppress(RuntimeError):
+            await websocket.send_json(
+                {"type": "error", "code": "invalid_audio_frame", "detail": str(error)}
+            )
+            await websocket.close(code=4400)
     finally:
         session.sockets.discard(websocket)
+        # A terminated capture has no producer; release its in-memory session.
+        await manager.delete(session_id)
