@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "CineNihongo",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "minimum_chrome_version": "116",
   "description": "Local Japanese transcription and romaji overlays for HTML5 video.",
   "permissions": ["storage", "activeTab", "scripting", "tabCapture", "offscreen"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
-  "optional_host_permissions": ["<all_urls>"],
   "background": { "service_worker": "assets/background.js", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "CineNihongo" },
   "commands": {

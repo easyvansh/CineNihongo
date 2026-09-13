@@ -14,7 +14,6 @@ export default defineConfig({
       input: {
         popup: resolve(root, "popup.html"),
         offscreen: resolve(root, "offscreen.html"),
-        content: resolve(root, "src/content/index.ts"),
         background: resolve(root, "src/background/serviceWorker.ts"),
         offscreenScript: resolve(root, "src/offscreen/index.ts")
       },

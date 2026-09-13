@@ -1,33 +1,40 @@
 {
   "name": "cinenihongo-extension",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "vite build --watch --mode development",
-    "build": "tsc -b && vite build",
+    "precheck": "node ../scripts/verify-source.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "build": "tsc -b && node scripts/build.mjs",
     "test": "vitest run",
+    "test:browser": "node scripts/browser-test.mjs",
+    "test:capture": "node scripts/capture-test.mjs",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc -b --pretty false",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.1.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.19.0",
-    "@types/chrome": "^0.0.304",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "eslint": "^9.19.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "globals": "^15.14.0",
-    "typescript": "^5.7.0",
-    "typescript-eslint": "^8.22.0",
-    "vitest": "^4.1.11"
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.62.1",
+    "@types/chrome": "0.0.304",
+    "@types/node": "22.20.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "4.7.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "globals": "15.15.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vite": "6.4.3",
+    "vitest": "4.1.11"
   }
 }

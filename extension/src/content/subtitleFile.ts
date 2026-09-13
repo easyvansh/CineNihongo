@@ -1,5 +1,9 @@
 export interface FileCue { start: number; end: number; text: string; }
-const time = (value: string) => { const p = value.trim().replace(",", ".").split(":").map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+const time = (value: string) => {
+  const match = value.match(/^(?:(\d+):)?(\d{2}):(\d{2})(?:[,.](\d{1,3}))?$/);
+  if (!match || Number(match[2]) >= 60 || Number(match[3]) >= 60) return NaN;
+  return Number(match[1] ?? 0) * 3600 + Number(match[2]) * 60 + Number(match[3]) + Number(`0.${match[4] ?? 0}`);
+};
 
 export function parseSubtitleFile(input: string): FileCue[] {
   const normalized = input.replace(/^\uFEFF/, "").replace(/\r/g, "");
@@ -11,12 +15,13 @@ export function parseSubtitleFile(input: string): FileCue[] {
     const match = lines[timingIndex].match(/([\d:,.]+)\s*-->\s*([\d:,.]+)/);
     if (!match) continue;
     const text = lines.slice(timingIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-    if (text) cues.push({ start: time(match[1]), end: time(match[2]), text });
+    const start = time(match[1]); const end = time(match[2]);
+    if (text && Number.isFinite(start) && Number.isFinite(end) && start >= 0 && end > start) cues.push({ start, end, text });
   }
   return cues.sort((a, b) => a.start - b.start);
 }
 
-export function cueAt(cues: FileCue[], mediaTime: number) { return cues.find((cue) => cue.start <= mediaTime && cue.end >= mediaTime) ?? null; }
+export function cueAt(cues: FileCue[], mediaTime: number) { return cues.find((cue) => cue.start <= mediaTime && cue.end > mediaTime) ?? null; }
 
 const KANA: Record<string, string> = {
   あ:"a",い:"i",う:"u",え:"e",お:"o",か:"ka",き:"ki",く:"ku",け:"ke",こ:"ko",さ:"sa",し:"shi",す:"su",せ:"se",そ:"so",た:"ta",ち:"chi",つ:"tsu",て:"te",と:"to",な:"na",に:"ni",ぬ:"nu",ね:"ne",の:"no",は:"ha",ひ:"hi",ふ:"fu",へ:"he",ほ:"ho",ま:"ma",み:"mi",む:"mu",め:"me",も:"mo",や:"ya",ゆ:"yu",よ:"yo",ら:"ra",り:"ri",る:"ru",れ:"re",ろ:"ro",わ:"wa",を:"o",ん:"n",
